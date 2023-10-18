@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as marked from 'marked';
 import * as fs from 'fs';
-
+// 
 import { getProviderErrorMsg, promptForApiKey, providerFromModel } from './utils';
 
 import { ChatCompletionRequestMessage } from "openai";

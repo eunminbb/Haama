@@ -3,30 +3,30 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HanaLLM</title>
-        <link rel="stylesheet" href="${paths.chatideCssPath}">
+        <title>HaaMA</title>
+        <link rel="stylesheet" href="${paths.haamaCssPath}">
     </head>
     <body>
         <div id="chat-container">
             <div id="chat-header">
               <div id="logo-container">
                 <img id="chat-logo" src="${paths.iconPath}">
-                <h1 id="chat-title">HanaLLM</h1>
+                <h1 id="chat-title">HaaMA</h1>
               </div>
               <div id="chat-control">
-                <button id="reset-button" class="control-btn">Reset</button>
-                <button id="export-button" class="control-btn">Export Messages</button>
-                <button id="import-button" class="control-btn">Load Chat History</button>
+                <button id="reset-button" class="control-btn">초기화</button>
+                <button id="export-button" class="control-btn">Messages 내보내기</button>
+                <button id="import-button" class="control-btn">Chat History 불러오기</button>
               </div>
               <div id="config-container">
-                <p id="config-details"><span id="model-prefix">Model: </span><span id="model-name">${modelConfigDetails}</span></p>
+                <p id="config-details"><span id="model-prefix">모델: </span><span id="model-name">${modelConfigDetails}</span></p>
                 <button id="settings-button">⚙</button>
               </div>
             </div>
             <div id="messages"></div>
             <div class="chat-bar">
-              <textarea id="message-input" spellcheck="true" oninput="autoResize(this)" placeholder="Type your question here..."></textarea>
-              <button id="send-button">Send</button>
+              <textarea id="message-input" spellcheck="true" oninput="autoResize(this)" placeholder="메세지를 입력하세요."></textarea>
+              <button id="send-button">보내기</button>
             </div>
             <div id="status-bar">
               <span id="highlighted-code-status">${codeHighlightStatusCopy}</span>
@@ -35,6 +35,6 @@
         </div>
         <link rel="stylesheet" href="${paths.highlightJsCssPath}">
         <script src="${paths.highlightJsScriptPath}"></script>
-        <script src="${paths.chatideJsPath}"></script>
+        <script src="${paths.haamaJsPath}"></script>
      </body>
 </html>

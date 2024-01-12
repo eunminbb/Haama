@@ -5,20 +5,17 @@ import * as path from 'path';
 import * as marked from 'marked';
 import * as fs from 'fs';
 // 
-import { getProviderErrorMsg, promptForApiKey, providerFromModel } from './utils';
+import { getProviderErrorMsg,providerFromModel } from './utils';
 
 import { ChatCompletionRequestMessage } from "openai";
 
 import { APIProvider } from "./apiProvider";
-import { AnthropicProvider, AnthropicParams, convertOpenAIMessagesToAnthropicMessages } from "./anthropic";
-import { OpenAIProvider, OpenAIParams } from "./openai";
-import { CustomLLMProvider } from './custom';
 import { OllamaParams, ollamaLLMProvider } from './ollama';
 
 interface ResourcePaths {
     htmlPath: string;
-    chatideJsPath: string;
-    chatideCssPath: string;
+    haamaJsPath: string;
+    haamaCssPath: string;
     iconPath: string;
     highlightJsCssPath: string;
     highlightJsScriptPath: string;
@@ -33,7 +30,7 @@ console.log("Node.js version:", process.version);
 const isMac = process.platform === "darwin";
 
 const OS_LOCALIZED_KEY_CHORD = isMac ? "Cmd+Shift+P" : "Ctrl+Shift+P";
-const NO_SELECTION_COPY = "No code is highlighted. Highlight code to include it in the message to ChatGPT.";
+const NO_SELECTION_COPY = "No code is highlighted. Highlight code to include it in the message to OLLAMA.";
 const SELECTION_AWARENESS_OFF_COPY = `Code selection awareness is turned off. To turn it on, go to settings (${OS_LOCALIZED_KEY_CHORD}).`;
 
 let apiProvider: APIProvider | undefined;
@@ -42,12 +39,12 @@ let messages: ChatCompletionRequestMessage[] = [];
 let selectedCode: string;
 let selectedCodeSentToGpt: string;
 
-let highlightedCodeAwareness: boolean = vscode.workspace.getConfiguration('chatide').get('highlightedCodeAwareness') || false;
-let customServerUrl: string|undefined = vscode.workspace.getConfiguration('chatide').get('customServerUrl') || undefined;
-let pressEnterToSend: boolean = vscode.workspace.getConfiguration('chatide').get('pressEnterToSend') || false;
+let highlightedCodeAwareness: boolean = vscode.workspace.getConfiguration('haama').get('highlightedCodeAwareness') || false;
+
+let pressEnterToSend: boolean = vscode.workspace.getConfiguration('haama').get('pressEnterToSend') || false;
 
 function gatherPreferences(): Preferences {
-    const pressEnterToSend = vscode.workspace.getConfiguration('chatide').get('pressEnterToSend') || false;
+    const pressEnterToSend = vscode.workspace.getConfiguration('haama').get('pressEnterToSend') || false;
     return {
         pressEnterToSend
     } as Preferences;
@@ -56,84 +53,74 @@ function gatherPreferences(): Preferences {
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-    console.log("activate chatide");
+    console.log("activate haama");
     
     context.subscriptions.push(
-        vscode.commands.registerCommand('chatide.openSettings', openSettings)
+        vscode.commands.registerCommand('haama.openSettings', openSettings)
     );
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand('chatide.updateOpenAiApiKey', async () => {
-            await promptForApiKey("openAi", context);
-        })
-    );
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand('chatide.updateAnthropicApiKey', async () => {
-            await promptForApiKey("anthropic", context);
-        })
-    );
 
-    const secretStorage = context.secrets;
-    const secretChangeListener = secretStorage.onDidChange(async (e: vscode.SecretStorageChangeEvent) => {
-        const forceReinit = true;
+    // const secretStorage = context.secrets;
+    // const secretChangeListener = secretStorage.onDidChange(async (e: vscode.SecretStorageChangeEvent) => {
+    //     const forceReinit = true;
       
-        if (e.key === "chatide.anthropicApiKey") {
-            const key = await context.secrets.get("chatide.anthropicApiKey");
-            if (!key) {
-                return;
-            }
-            // Reinitialize the API provider if the Anthropic API key changes
-            await initApiProviderIfNeeded(context, forceReinit);
-        } else if (e.key === "chatide.openAiApiKey") {
-            const key = await context.secrets.get("chatide.openAiApiKey");
-            if (!key) {
-                return;
-            }
-            // Reinitialize the API provider if the OpenAI API key changes
-            await initApiProviderIfNeeded(context, forceReinit);
-        }
-    });
+    //     if (e.key === "haama.anthropicApiKey") {
+    //         const key = await context.secrets.get("haama.anthropicApiKey");
+    //         if (!key) {
+    //             return;
+    //         }
+    //         // Reinitialize the API provider if the Anthropic API key changes
+    //         await initApiProviderIfNeeded(context, forceReinit);
+    //     } else if (e.key === "haama.openAiApiKey") {
+    //         const key = await context.secrets.get("haama.openAiApiKey");
+    //         if (!key) {
+    //             return;
+    //         }
+    //         // Reinitialize the API provider if the OpenAI API key changes
+    //         await initApiProviderIfNeeded(context, forceReinit);
+    //     }
+    // });
   
-    context.subscriptions.push(secretChangeListener);
+    // context.subscriptions.push(secretChangeListener);
 
-    let disposable = vscode.commands.registerCommand('chatide.start', async () => {
-        const chatIdePanel = vscode.window.createWebviewPanel(
-            'chatIde',
-            'HanaLLM',
+    let disposable = vscode.commands.registerCommand('haama.start', async () => {
+        const haamaPanel = vscode.window.createWebviewPanel(
+            'haama',
+            'HaaMa',
             vscode.ViewColumn.Beside,
             {
                 // allow the extension to reach files in the bundle
                 localResourceRoots: [vscode.Uri.file(path.join(__dirname, '..'))],
                 enableScripts: true,
-                // Retain the context when the webview becomes hidden
+                // Retain the contsßext when the webview becomes hidden
                 retainContextWhenHidden: true,
             },
         );
 
         //  ---------------  웹뷰 Path : html, js, css  -----------
-        const htmlPathUri = vscode.Uri.file(path.join(context.extensionPath, 'src' ,'chatide.html'));
+        const htmlPathUri = vscode.Uri.file(path.join(context.extensionPath, 'src' ,'haama.html'));
         const htmlPath = htmlPathUri.with({scheme: 'vscode-resource'});   
         
-        let jsPathUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "chatide.js")));
-        const jsPath = chatIdePanel.webview.asWebviewUri(jsPathUri).toString();
+        let jsPathUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "haama.js")));
+        const jsPath = haamaPanel.webview.asWebviewUri(jsPathUri).toString();
         
-        let cssUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "chatide.css")));
-        const cssPath = chatIdePanel.webview.asWebviewUri(cssUri).toString();
+        let cssUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "haama.css")));
+        const cssPath = haamaPanel.webview.asWebviewUri(cssUri).toString();
         
         let highlightJsCssUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "atom-one-dark.min.css")));
-        const highlightJsCssPath = chatIdePanel.webview.asWebviewUri(highlightJsCssUri).toString();
+        const highlightJsCssPath = haamaPanel.webview.asWebviewUri(highlightJsCssUri).toString();
         
         let highlightJsScriptUri = vscode.Uri.file(context.asAbsolutePath(path.join('src', "highlight.min.js")));
-        const highlightJsScriptPath = chatIdePanel.webview.asWebviewUri(highlightJsScriptUri).toString();
+        const highlightJsScriptPath = haamaPanel.webview.asWebviewUri(highlightJsScriptUri).toString();
         
-        let iconUri = vscode.Uri.file(context.asAbsolutePath(path.join('assets', "hana.png")));
-        const iconPath = chatIdePanel.webview.asWebviewUri(iconUri).toString();
+        let iconUri = vscode.Uri.file(context.asAbsolutePath(path.join('assets', "hana2.png")));
+        const iconPath = haamaPanel.webview.asWebviewUri(iconUri).toString();
         
         //  -------------------------------------------------------
 
 
-        const model = vscode.workspace.getConfiguration('chatide').get('model') || "No model configured";
+        const model = vscode.workspace.getConfiguration('haama').get('model') || "No model configured";
         const provider = providerFromModel(model.toString());
         // provider == "ollama"
 
@@ -142,53 +129,53 @@ export function activate(context: vscode.ExtensionContext) {
             console.error('Error fetching stream:', error);
             const errorMessage = error.message;
             const humanRedableError = getProviderErrorMsg(provider.toString(), errorMessage);
-            chatIdePanel.webview.postMessage({ command: "openAiError", error: humanRedableError });
+            haamaPanel.webview.postMessage({ command: "ollamaError", error: humanRedableError });
         };
         
         const configDetails = model.toString();
         
         const resourcePaths = {
             htmlPath: htmlPath.fsPath,
-            chatideJsPath: jsPath.toString(),
-            chatideCssPath: cssPath.toString(),
+            haamaJsPath: jsPath.toString(),
+            haamaCssPath: cssPath.toString(),
             iconPath: iconPath.toString(),
             highlightJsCssPath: highlightJsCssPath,
             highlightJsScriptPath: highlightJsScriptPath,
         };
 
-        chatIdePanel.webview.html = getWebviewContent(resourcePaths, configDetails);
+        haamaPanel.webview.html = getWebviewContent(resourcePaths, configDetails);
 
         const preferences = gatherPreferences();
         console.log("preferences", preferences);
-        chatIdePanel.webview.postMessage({
+        haamaPanel.webview.postMessage({
             command: 'updatePreferences',
             preferences
         });
           
         resetChat();
 
-        chatIdePanel.webview.onDidReceiveMessage(
+        haamaPanel.webview.onDidReceiveMessage(
             async (message) => {
                 switch (message.command) {
-                case "getGptResponse":
+                case "getLlamaResponse":
                     // Turn the user's message to Markdown and echo it back
                     const userMessageMarkdown = marked.marked(message.userMessage);
-                    chatIdePanel.webview.postMessage({ command: "sentUserMessage", userMessageMarkdown });
+                    haamaPanel.webview.postMessage({ command: "sentUserMessage", userMessageMarkdown });
                     
-                    // Proceed to query OpenAI API and stream back the generated tokens.
+                    // Proceed to query API and stream back the generated chunks.
                     await initApiProviderIfNeeded(context);
 
-                    await getGptResponse(
+                    await getLlamaResponse(
                         message.userMessage,
-                        (token) => {
-                            chatIdePanel.webview.postMessage({ command: "gptResponse", token });
+                        (chunk) => {
+                            haamaPanel.webview.postMessage({ command: "getLlamaResponse", chunk });
                         },
                         errorCallback
                     );
                     return;
                 case "resetChat":
                     resetChat();
-                    chatIdePanel.webview.postMessage({ command: "resetChatComplete" });
+                    haamaPanel.webview.postMessage({ command: "resetChatComplete" });
                     return;
                 case "exportChat":
                     await exportChat();
@@ -196,8 +183,8 @@ export function activate(context: vscode.ExtensionContext) {
                 case "importChat":
                     const success = await importChat();
                     if (success) {
-                        chatIdePanel.webview.postMessage({ command: "loadChatComplete", messages });
-                    } else {
+                        haamaPanel.webview.postMessage({ command: "loadChatComplete", messages });
+                    } else {    
                         console.error("Failed to import chat");
                     }
                     return;
@@ -214,7 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                     return;
                 case "openSettings":
-                    vscode.commands.executeCommand('workbench.action.openSettings', 'chatide');
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'haama');
                     break;
                 }
 
@@ -225,46 +212,41 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Add an event listener for selection changes
         context.subscriptions.push(
-            vscode.window.onDidChangeTextEditorSelection((event) => handleSelectionChange(event, chatIdePanel))
+            vscode.window.onDidChangeTextEditorSelection((event) => handleSelectionChange(event, haamaPanel))
         );
 
         // listen for changes in highlightedCodeAwareness
         vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
-            if (e.affectsConfiguration('chatide.highlightedCodeAwareness')) {
-                highlightedCodeAwareness = vscode.workspace.getConfiguration('chatide').get('highlightedCodeAwareness') || false;
+            if (e.affectsConfiguration('haama.highlightedCodeAwareness')) {
+                highlightedCodeAwareness = vscode.workspace.getConfiguration('haama').get('highlightedCodeAwareness') || false;
                 
                 // This is imperfect because if there's code selected while the setting is changed
                 // the status copy will be 'wrong'. 
-                chatIdePanel.webview.postMessage({
+                haamaPanel.webview.postMessage({
                     command: 'updateHighlightedCodeStatus',
                     status: !highlightedCodeAwareness ? SELECTION_AWARENESS_OFF_COPY : NO_SELECTION_COPY,
                     showButton: false
                 });
             }
-            if (e.affectsConfiguration('chatide.pressEnterToSend')) {
-                console.log(`pressEnterToSend changed to ${vscode.workspace.getConfiguration('chatide').get('pressEnterToSend')}`);
-                pressEnterToSend = vscode.workspace.getConfiguration('chatide').get('pressEnterToSend') || false;
-                chatIdePanel.webview.postMessage({
+            if (e.affectsConfiguration('haama.pressEnterToSend')) {
+                console.log(`pressEnterToSend changed to ${vscode.workspace.getConfiguration('haama').get('pressEnterToSend')}`);
+                pressEnterToSend = vscode.workspace.getConfiguration('haama').get('pressEnterToSend') || false;
+                haamaPanel.webview.postMessage({
                     command: 'updatePreferences',
                     preferences: gatherPreferences(),
                 });
             }
 
-            if (e.affectsConfiguration('chatide.customServerUrl')) {
-                console.log(`customServerUrl changed to ${vscode.workspace.getConfiguration('chatide').get('customServerUrl')}`);
+            if (e.affectsConfiguration('haama.model')) {
                 initApiProviderIfNeeded(context, true);
-            }
-
-            if (e.affectsConfiguration('chatide.model')) {
-                initApiProviderIfNeeded(context, true);
-                chatIdePanel.webview.postMessage({
+                haamaPanel.webview.postMessage({
                     command: 'updateModelConfigDetails',
-                    modelConfigDetails: vscode.workspace.getConfiguration('chatide').get('model')!,
+                    modelConfigDetails: vscode.workspace.getConfiguration('haama').get('model')!,
                 });
             }
         });
         
-        chatIdePanel.onDidDispose(
+        haamaPanel.onDidDispose(
             () => {
                 console.log('WebView closed');
             },
@@ -277,7 +259,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function openSettings() {
-    vscode.commands.executeCommand('workbench.action.openSettings', 'chatide');
+    vscode.commands.executeCommand('workbench.action.openSettings', 'haama');
 }
 
 function getWebviewContent(
@@ -302,9 +284,9 @@ function getWebviewContent(
 function resetChat() {
     console.log("Resetting chat");
     // Load the sytem prompt and clear the chat history.
-    let systemPrompt: any = vscode.workspace.getConfiguration('chatide').get('systemPrompt');
+    let systemPrompt: any = vscode.workspace.getConfiguration('haama').get('systemPrompt');
     if (!systemPrompt) {
-        vscode.window.showErrorMessage('No system prompt found in the ChatIDE settings. Please add your system prompt using the "Open ChatIDE Settings" command and restart the extension.');
+        vscode.window.showErrorMessage('No system prompt found in the haama settings. Please add your system prompt using the "Open haama Settings" command and restart the extension.');
         return;
     }
 
@@ -312,7 +294,7 @@ function resetChat() {
     messages.push({"role": "system", "content": systemPrompt.toString()});
 }
 
-async function getGptResponse(userMessage: string, completionCallback: (completion: string) => void ,errorCallback?: (error: any) => void) {
+async function getLlamaResponse(userMessage: string, completionCallback: (completion: string) => void ,errorCallback?: (error: any) => void) {
     if (!apiProvider) {
         throw new Error("API provider is not initialized.");
     }
@@ -327,38 +309,40 @@ async function getGptResponse(userMessage: string, completionCallback: (completi
   
     messages.push({ role: "user", content: userMessage });
   
-    const maxTokens = vscode.workspace.getConfiguration("chatide").get("maxLength");
-    const model = vscode.workspace.getConfiguration("chatide").get("model")!;
+    const maxTokens = vscode.workspace.getConfiguration("haama").get("maxLength");
+    const model = vscode.workspace.getConfiguration("haama").get("model")!;
     let provider = providerFromModel(model.toString());
-    const temperature = vscode.workspace.getConfiguration("chatide").get("temperature");
+    const temperature = vscode.workspace.getConfiguration("haama").get("temperature");
   
     if (!maxTokens) {
         vscode.window.showErrorMessage(
-            'Missing maxLength in the ChatIDE settings. Please add them using the "Open ChatIDE Settings" command and restart the extension.'
+            'Missing maxLength in the haama settings. Please add them using the "Open haama Settings" command and restart the extension.'
         );
         return;
     }
 
-    let params: OpenAIParams | AnthropicParams | OllamaParams;
+    let params: OllamaParams;
 
-    if (provider === "openai" || provider === "custom") {
-        params = {
-            model: model.toString(),
-            messages: messages,
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            max_tokens: Number(maxTokens),
-            temperature: Number(temperature),
-            stream: true,
-        };
-    } else if (provider === "anthropic") {
-        params = {
-            prompt: convertOpenAIMessagesToAnthropicMessages(messages),
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            max_tokens: Number(maxTokens),
-            model: model.toString(),
-        };
-    } else if (provider === "ollama") {
-        console.log("ollama 메세지",messages)
+    // if (provider === "openai" || provider === "custom") {
+    //     params = {
+    //         model: model.toString(),
+    //         messages: messages,
+    //         // eslint-disable-next-line @typescript-eslint/naming-convention
+    //         max_tokens: Number(maxTokens),
+    //         temperature: Number(temperature),
+    //         stream: true,
+    //     };
+    // } else if (provider === "anthropic") {
+    //     params = {
+    //         prompt: convertOpenAIMessagesToAnthropicMessages(messages),
+    //         // eslint-disable-next-line @typescript-eslint/naming-convention
+    //         max_tokens: Number(maxTokens),
+    //         model: model.toString(),
+    //     };
+    // } 
+    console.log("프로바이더 === ", provider)
+    if (provider === "ollama") {
+        console.log("ollama 메세지", messages)
         params = {
             prompts: messages,
             model: model.toString(),
@@ -367,7 +351,7 @@ async function getGptResponse(userMessage: string, completionCallback: (completi
     }
     else {
         vscode.window.showErrorMessage(
-            'Unsupported AI provider in the ChatIDE settings. Please add it using the "Open ChatIDE Settings" command and restart the extension.'
+            'Unsupported AI provider in the haama settings. Please add it using the "Open haama Settings" command and restart the extension.'
         );
         return;
     }
@@ -395,7 +379,7 @@ async function getGptResponse(userMessage: string, completionCallback: (completi
 
 async function exportChat() {
     const options: vscode.SaveDialogOptions = {
-        defaultUri: vscode.Uri.file('chatIDE-history-'),
+        defaultUri: vscode.Uri.file('haama-history-'),
         filters: {
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'JSON': ['json']
@@ -458,32 +442,35 @@ async function initApiProviderIfNeeded(context: vscode.ExtensionContext, force: 
         return;
     }
   
-    const model = vscode.workspace.getConfiguration("chatide").get("model")!;
+    const model = vscode.workspace.getConfiguration("haama").get("model")!;
     const providerType = providerFromModel(model.toString());
     if (!providerType) {
         vscode.window.showErrorMessage(
-            'No provider found in the ChatIDE settings. Please add your provider using the "Open ChatIDE Settings" command and restart the extension.'
+            'No provider found in the haama settings. Please add your provider using the "Open haama Settings" command and restart the extension.'
         );
         return;
     }
   
-    if (providerType === "anthropic") {
-        console.log("Initializing Anthropic provider...");
-        apiProvider = new AnthropicProvider(context);
-    } else if (providerType === "openai") {
-        console.log("Initializing OpenAI provider...");
-        apiProvider = new OpenAIProvider(context);
-    } 
-    else if (providerType === "custom") {
-        console.log("Initializing custom provider...");
-        apiProvider = new CustomLLMProvider(context, customServerUrl);
-    } else if (providerType === "ollama") {
+    // if (providerType === "anthropic") {
+    //     console.log("Initializing Anthropic provider...");
+    //     apiProvider = new AnthropicProvider(context);
+    // } else if (providerType === "openai") {
+    //     console.log("Initializing OpenAI provider...");
+    //     apiProvider = new OpenAIProvider(context);
+    // } 
+    // else if (providerType === "custom") {
+    //     console.log("Initializing custom provider...");
+    //     apiProvider = new CustomLLMProvider(context, customServerUrl);
+    // } 
+
+
+    if (providerType === "ollama") {
         console.log("Initializing ollama provider...");
         apiProvider = new ollamaLLMProvider(context);
         
     } else {
         vscode.window.showErrorMessage(
-            `Invalid provider "${providerType}" in the ChatIDE settings. Please use a valid provider and restart the extension.`
+            `Invalid provider "${providerType}" in the haama settings. Please use a valid provider and restart the extension.`
         );
         return;
     }
@@ -517,23 +504,23 @@ function getTokenEstimateString(numCharacters: number): string {
     return `~${estimate} tokens`;
 }
 
-function handleSelectionChange(event: vscode.TextEditorSelectionChangeEvent, chatIdePanel: vscode.WebviewPanel) {
+function handleSelectionChange(event: vscode.TextEditorSelectionChangeEvent, haamaPanel: vscode.WebviewPanel) {
     selectedCode = event.textEditor.document.getText(event.selections[0]);
     if (selectedCode && highlightedCodeAwareness) {
         const numCharacters = selectedCode.length;
-        chatIdePanel.webview.postMessage({
+        haamaPanel.webview.postMessage({
             command: 'updateHighlightedCodeStatus',
             status: `${numCharacters} characters (${getTokenEstimateString(numCharacters)}) are highlighted. This code will be included in your message to the assistant.`,
             showButton: true
         });
     } else if (!highlightedCodeAwareness) {
-        chatIdePanel.webview.postMessage({
+        haamaPanel.webview.postMessage({
             command: 'updateHighlightedCodeStatus',
             status: SELECTION_AWARENESS_OFF_COPY,
             showButton: false
         });
     } else {
-        chatIdePanel.webview.postMessage({
+        haamaPanel.webview.postMessage({
             command: 'updateHighlightedCodeStatus',
             status: NO_SELECTION_COPY,
             showButton: false
@@ -552,5 +539,5 @@ function prepareSelectedCodeContext() {
 
 // This method is called when your extension is deactivated
 export function deactivate() {
-    console.log("deactivate chatide");
+    console.log("deactivate Haama");
 }

@@ -32,4 +32,4 @@ jobs:
       - name: Publish to Marketplace
         run: vsce publish -p ${{ secrets.MS_AZURE_PAT }}
         env:
-          PUBLISHER_ID: chatIDE
+          PUBLISHER_ID: Haama

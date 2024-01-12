@@ -59,8 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
         case "sentUserMessage":
             addMessage("user", message.userMessageMarkdown);
             break;
-        case "gptResponse":
-            addMessage("assistant", message.token, true);
+        case "getLlamaResponse":
+            addMessage("assistant", message.chunk, true);
             break;
         case "resetChatComplete":
             messagesContainer.innerHTML = "";
@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 addMessage(message.role, message.content);
             });
             break;
-        case "openAiError":
+        case "ollamaError":
             addMessage("extension", message.error);
             break;
         case "updateHighlightedCodeStatus":
@@ -89,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
         case "updatePreferences":
             gPreferences = message.preferences;
             if (gPreferences.pressEnterToSend) {
-                document.getElementById('send-button').textContent = "⏎ to Send";
+                document.getElementById('send-button').textContent = "보내기";
                 document.getElementById('send-button').style.fontSize = '0.8em';
             } else {
                 console.log('unhiding send-button');
@@ -133,6 +133,17 @@ document.addEventListener("DOMContentLoaded", () => {
             messageElement = document.createElement("div");
             messageElement.className = className;
         }
+        let chatIcon = document.createElement("img");
+        // chatIcon.src = "/assets/hana.png";
+        // chatIcon.className = "chat-icon";
+        // let msgcontent = document.createElement("div");
+        // msgcontent.innerHTML = content;
+        // messageElement.append(chatIcon, msgcontent);
+
+
+
+        // messageElement.innerHTML = `<img id="ee" src="${paths.iconPath}">` + `<div>${content}</div>`;
+
 
         messageElement.innerHTML = content;
 
@@ -168,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
         vscode.postMessage(
             {
-                command: "getGptResponse",
+                command: "getLlamaResponse",
                 userMessage: escapeHtml(userMessage),
             }
         );
@@ -231,7 +242,7 @@ function highlightCodeBlocks(element) {
 }
 
 function createCopyCodeButton(codeBlock) {
-    const COPY_BUTTON_TEXT = 'Copy code';
+    const COPY_BUTTON_TEXT = '복사';
     const button = document.createElement('button');
 
     button.textContent = COPY_BUTTON_TEXT;
